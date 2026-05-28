@@ -12,4 +12,6 @@ int i2c_read_reg(int fd, unsigned char reg, unsigned char *buf, int len);
 // I2C 写寄存器
 int i2c_write_reg(int fd, unsigned char reg, unsigned char val);
 
+
+int dht3x_read_raw(int fd, unsigned char *buf);
 #endif

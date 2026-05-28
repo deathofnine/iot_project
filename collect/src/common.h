@@ -5,6 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <stdint.h>
 
 // 传感器数据结构体（三进程统一用这个）
 typedef struct {
