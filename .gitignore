@@ -1,0 +1,31 @@
+# 编译产物
+*.o
+*.d
+*.a
+*.so
+*.bin
+*.elf
+*.map
+*.exe
+*.out
+
+# 日志与临时文件
+log/
+*.log
+*.tmp
+*.pid
+
+# Qt 生成文件
+*.pro.user
+*.qm
+ui_*.h
+moc_*.cpp
+qrc_*.cpp
+build/
+debug/
+release/
+
+# 编辑器临时文件
+*.swp
+*.swo
+*.bak
