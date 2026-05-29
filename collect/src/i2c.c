@@ -52,7 +52,7 @@ int i2c_write_reg(int fd, unsigned char reg, unsigned char val)
 
 }
 
-int dht3x_read_raw(int fd, unsigned char *buf)
+int sht3x_read_raw(int fd, unsigned char *buf)
 {
     // 必须用 ioctl 直接发 I2C 时序 才能带 RESTART
     struct i2c_msg msgs[2];

@@ -13,7 +13,6 @@ int mpu6050_init(const char *i2c_dev)
 
     // 唤醒 MPU6050
     if (i2c_write_reg(fd, PWR_MGMT_1, 0x00) < 0) {
-        close(fd);
         return -1;
     }
 
