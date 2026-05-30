@@ -1,5 +1,4 @@
-
-CROSS_COMPILE = 
+CROSS_COMPILE = arm-buildroot-linux-gnueabihf-
 AS		= $(CROSS_COMPILE)as
 LD		= $(CROSS_COMPILE)ld
 CC		= $(CROSS_COMPILE)gcc
@@ -17,17 +16,18 @@ export STRIP OBJCOPY OBJDUMP
 CFLAGS := -Wall -O2 -g
 CFLAGS += -I $(shell pwd)/include
 
-LDFLAGS := -lpthread
+LDFLAGS := -pthread 
 
 export CFLAGS LDFLAGS
 
 TOPDIR := $(shell pwd)
 export TOPDIR
 
-TARGET := test
+TARGET := service
 
 
 obj-y += src/
+
 
 
 all : start_recursive_build $(TARGET)
