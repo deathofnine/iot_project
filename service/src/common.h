@@ -21,7 +21,7 @@ extern pthread_mutex_t g_data_mutex;
 
 // 本地Socket通信路径
 #define SOCKET_PATH "/tmp/iot_collect_socket"
-
+#define RPC_PATH "/tmp/iot_rpc_socket"
 // 指令类型
 #define CMD_GET_DATA 1
 #define CMD_SET_LED  2

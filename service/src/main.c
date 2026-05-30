@@ -1,12 +1,16 @@
 #include "common.h"
 #include "socket_server.h"
 #include "rpc_server.h"
+#include "service.h"
 sensor_data_t g_sensor;
 pthread_mutex_t g_data_mutex;
 
 
 int main()
 {
+
+
+    
     pthread_mutex_init(&g_data_mutex, NULL);
     printf("=== service 服务端启动 ===\n");
     pthread_t tid_collect;

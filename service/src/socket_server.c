@@ -2,7 +2,6 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <errno.h>
-
 void *socket_server_thread(void *arg)
 {   
     int fd_server, fd_client;
