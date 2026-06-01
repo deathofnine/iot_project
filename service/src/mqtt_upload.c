@@ -14,7 +14,9 @@
 #define USER_NAME     "6a00bc177f2e6c302f6f8843_imx6ull_sensor_001"
 #define PASSWORD      "60b30cc1d11132dce2e8194019a952253346893dbc1c4afebe8e8254998a317d"
 // 华为云IoT 物模型上报主题（固定格式）
-#define TOPIC_POST    "$sys/6a00bc177f2e6c302f6f8843_imx6ull_sensor_001/thing/property/post"
+  #define TOPIC_POST "$oc/devices/6a00bc177f2e6c302f6f8843_imx6ull_sensor_001/sys/properties/report"
+
+"
 #define MQTT_QOS           0
 #define MQTT_KEEPALIVE     60
 // ==========================================================
@@ -70,20 +72,23 @@ static void mqtt_upload_data(void)
     char payload[256];
     snprintf(payload, sizeof(payload),
         "{"
-            "\"id\":1,"
-            "\"version\":\"1.0\","
-            "\"params\":{"
-                "\"temp\":{\"value\":%.1f},"
-                "\"hum\":{\"value\":%.1f},"
-                "\"ax\":{\"value\":%.2f},"
-                "\"ay\":{\"value\":%.2f},"
-                "\"az\":{\"value\":%.2f},"
-                "\"gx\":{\"value\":%.2f},"
-                "\"gy\":{\"value\":%.2f},"
-                "\"gz\":{\"value\":%.2f}"
-            "}"
+            "\"services\": [{"
+                "\"service_id\": \"DeviceData\","
+                "\"properties\": {"
+                    "\"temp\": %.1f,"
+                    "\"hum\": %.1f,"
+                    "\"ax\": %.2f,"
+                    "\"ay\": %.2f,"
+                    "\"az\": %.2f,"
+                    "\"gx\": %.2f,"
+                    "\"gy\": %.2f,"
+                    "\"gz\": %.2f"
+                "}"
+            "}]"
         "}",
-        data.temp, data.hum, data.ax, data.ay, data.az, data.gx, data.gy, data.gz);
+        data.temp, data.hum,
+        data.ax, data.ay, data.az,
+        data.gx, data.gy, data.gz);
 
     MQTTClient_message pubmsg = MQTTClient_message_initializer;
     pubmsg.payload = payload;
