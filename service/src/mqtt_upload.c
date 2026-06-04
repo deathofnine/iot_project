@@ -9,54 +9,63 @@
 
 // ---------- 华为云IoT 新设备参数 ----------
 #define MQTT_HOST     "b1d7c0faf7.st1.iotda-device.cn-north-4.myhuaweicloud.com"
-#define MQTT_PORT     8883
+#define MQTT_PORT     1883
 #define CLIENT_ID     "6a00bc177f2e6c302f6f8843_imx6ull_sensor_001_0_0_2026060114"
 #define USER_NAME     "6a00bc177f2e6c302f6f8843_imx6ull_sensor_001"
 #define PASSWORD      "60b30cc1d11132dce2e8194019a952253346893dbc1c4afebe8e8254998a317d"
 // 华为云IoT 物模型上报主题（固定格式）
   #define TOPIC_POST "$oc/devices/6a00bc177f2e6c302f6f8843_imx6ull_sensor_001/sys/properties/report"
 
-"
 #define MQTT_QOS           0
-#define MQTT_KEEPALIVE     60
+#define MQTT_KEEPALIVE     30
+#define UPLOAD_INTERVAL    1   // 上报间隔 1秒
+#define RECONNECT_INTERVAL 2   // 重连间隔 2秒
 // ==========================================================
 
 static MQTTClient client;
 static int mqtt_connected = 0;
 
+void connLostCallback(void* context, char* cause)
+{
+    printf("[MQTT] 连接断开！\n");
+    mqtt_connected = 0;
+}
+
 static int mqtt_connect_broker(void)
 {
     int rc;
     MQTTClient_connectOptions conn_opts = MQTTClient_connectOptions_initializer;
-    MQTTClient_SSLOptions ssl_opts = MQTTClient_SSLOptions_initializer;  // 单独定义，修复编译错误
 
-    char broker_url[128];
-    snprintf(broker_url, sizeof(broker_url), "ssl://%s:%d", MQTT_HOST, MQTT_PORT);
-    rc = MQTTClient_create(&client, broker_url, CLIENT_ID,
-                          MQTTCLIENT_PERSISTENCE_NONE, NULL);
+
+    if (client != NULL) {
+        MQTTClient_destroy(&client);
+        client = NULL;
+    }
+
+    char broker_url[256];
+    snprintf(broker_url, sizeof(broker_url), "tcp://%s:%d", MQTT_HOST, MQTT_PORT);
+    rc = MQTTClient_create(&client, broker_url, CLIENT_ID,MQTTCLIENT_PERSISTENCE_NONE, NULL);
     if (rc != MQTTCLIENT_SUCCESS) {
         printf("[MQTT] create failed %d\n", rc);
         return -1;
     }
-
+    MQTTClient_setCallbacks(client, NULL, connLostCallback, NULL, NULL);
     conn_opts.keepAliveInterval = MQTT_KEEPALIVE;
     conn_opts.cleansession      = 1;
     conn_opts.username          = USER_NAME;
     conn_opts.password          = PASSWORD;
 
-    // SSL 正确配置
-    ssl_opts.enableServerCertAuth = 0;
-    conn_opts.ssl = &ssl_opts;  // 传递指针（关键修复）
 
     rc = MQTTClient_connect(client, &conn_opts);
     if (rc != MQTTCLIENT_SUCCESS) {
         printf("[MQTT] connect failed %d\n", rc);
         MQTTClient_destroy(&client);
+        client = NULL;
         mqtt_connected = 0;
         return -1;
     }
 
-    printf("[MQTT] 华为云连接成功 ✅\n");
+    printf("[MQTT] 华为云连接成功 \n");
     mqtt_connected = 1;
     return 0;
 }
@@ -64,7 +73,7 @@ static int mqtt_connect_broker(void)
 static void mqtt_upload_data(void)
 {
     if (!mqtt_connected) return;
-
+    MQTTClient_yield();
     pthread_mutex_lock(&g_data_mutex);
     sensor_data_t data = g_sensor;
     pthread_mutex_unlock(&g_data_mutex);
@@ -103,6 +112,7 @@ static void mqtt_upload_data(void)
         printf("[MQTT] 上报成功: %s\n", payload);
     } else {
         printf("[MQTT] 上报失败 %d\n", rc);
+        MQTTClient_disconnect(client, 0);
         mqtt_connected = 0;
     }
 }
@@ -111,13 +121,15 @@ void *mqtt_upload_thread(void *arg)
 {
     (void)arg;
     while (1) {
+        
         if (!mqtt_connected) {
+            printf("[MQTT] 尝试启动中\n");
             mqtt_connect_broker();
-            sleep(2);
+            sleep(RECONNECT_INTERVAL);
             continue;
         }
         mqtt_upload_data();
-        sleep(1);
+        sleep(UPLOAD_INTERVAL);
     }
     return NULL;
 }
