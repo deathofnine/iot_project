@@ -6,6 +6,13 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <stdint.h>
+#include <sys/types.h>          /* See NOTES */
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <signal.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+ #include <syslog.h>
 
 // 传感器数据结构体（三进程统一用这个）
 typedef struct {
