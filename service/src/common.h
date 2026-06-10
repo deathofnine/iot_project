@@ -6,6 +6,8 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <stdint.h>
+#include <sys/epoll.h>
+#include <sys/un.h>
 #include "cJSON.h"
 // 传感器数据结构体（三进程统一用这个）
 typedef struct {
