@@ -191,8 +191,9 @@ void *epoll_io_thread(void *arg)
             else if (ctx->type == FD_CLIENT_RPC)
             {
                 handle_rpc_client(fd, buf, r);
+                epoll_del(epfd, fd, ctx); // 短连接，读完直接关闭
             }
-            epoll_del(epfd, fd, ctx); // 短连接，读完直接关闭
+           
         }
     }
 
