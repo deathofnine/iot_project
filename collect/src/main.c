@@ -9,6 +9,7 @@
 
 pthread_mutex_t g_data_mutex;
 sensor_data_t g_sensor_data;
+
 int g_fd_sock = -1;
 static int running = 1; 
 

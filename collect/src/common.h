@@ -20,11 +20,21 @@ typedef struct {
     float hum;        // 湿度
     float ax, ay, az; // MPU6050 加速度
     float gx, gy, gz; // MPU6050 陀螺仪
+                       // 新增modbus仪表数据
+    uint16_t mb_reg0;
+    uint16_t mb_reg1;
+    float mb_vol;
+    float mb_cur;
     int led;          // LED 状态 0/1
 } sensor_data_t;
 
+
 // 本地Socket通信路径
 #define SOCKET_PATH "/tmp/iot_collect_socket"
+
+
+
+extern pthread_mutex_t local_mb_mtx;
 
 // 指令类型
 #define CMD_GET_DATA 1
