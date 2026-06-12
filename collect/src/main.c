@@ -2,6 +2,7 @@
 #include "mpu6050.h"
 #include "sht3x.h"
 #include "pthread.h"
+#include "log.h"
 #include <signal.h>
 #include <fcntl.h>
 #include <syslog.h>
@@ -27,6 +28,7 @@ static int daemonize(void)
     pid_t pid = fork();
     if(pid<0)
     {
+         LOG_ERROR_ERRNO("fork failed");
         return -1;
     }
     if(pid>0)
@@ -40,7 +42,7 @@ static int daemonize(void)
     pid=fork();
     if (pid < 0)
     {
-        syslog(LOG_ERR, "fork2 failed: %m");
+        LOG_ERROR_ERRNO("fork2 failed");
         exit(EXIT_FAILURE);
     }
     if (pid > 0)
@@ -70,22 +72,25 @@ void *collect_pthread(void *arg)
     float ax, ay, az, gx, gy, gz;
     // MPU6050初始化
     int fd_mpu = mpu6050_init("/dev/i2c-0");
-    if(fd_mpu<=0) syslog(LOG_ERR, "MPU6050 init failed");
-
-
+    if(fd_mpu<=0){
+        LOG_ERROR("MPU6050 init failed");
+    }
+    
     // SHT3X初始化
     int fd_sht = sht3x_init("/dev/i2c-0");
-    if(fd_sht<=0) syslog(LOG_ERR, "SHT3X init failed");
-    syslog(LOG_INFO, "采集线程成功启动");
-    syslog(LOG_INFO, "功能：I2C传感器采集");
+    if(fd_sht <= 0) {
+        LOG_ERROR("SHT3X init failed");
+    }
+    LOG_COLLECT_INFO("采集线程成功启动");
+    LOG_COLLECT_INFO("功能：I2C传感器采集");
     while(running)
     {
         //MPU读取
         mpu6050_read(fd_mpu, &ax, &ay, &az, &gx, &gy, &gz);
-        syslog(LOG_DEBUG, "AX:%.2f AY:%.2f AZ:%.2f | GX:%.2f GY:%.2f GZ:%.2f", ax, ay, az, gx, gy, gz);
+        LOG_COLLECT_DEBUG("AX:%.2f AY:%.2f AZ:%.2f | GX:%.2f GY:%.2f GZ:%.2f", ax, ay, az, gx, gy, gz);
         //sht读取
         sht3x_read(fd_sht, &temp, &hum);
-        syslog(LOG_DEBUG, "TEMP:%.1f HUM:%.1f", temp, hum);
+        LOG_COLLECT_DEBUG("TEMP:%.1f HUM:%.1f", temp, hum);
         pthread_mutex_lock(&g_data_mutex);
 
         // 加锁更新共享数据
@@ -98,9 +103,10 @@ void *collect_pthread(void *arg)
         g_sensor_data.gy   = gy;
         g_sensor_data.gz   = gz;
         pthread_mutex_unlock(&g_data_mutex);
+        
         sleep(1);
     }
-    syslog(LOG_INFO, "采集线程关闭");
+    LOG_COLLECT_INFO("采集线程关闭");
     close(fd_mpu);
     close(fd_sht);
     return NULL;
@@ -112,27 +118,35 @@ void *collect_pthread(void *arg)
 void *client_pthread(void *arg)
 {
     sleep(5);
+    int fd_sock = -1;
+
+            // service 服务端
+            struct sockaddr_un addr;
+            memset(&addr, 0, sizeof(addr));
+            addr.sun_family=AF_UNIX;
+            strcpy(addr.sun_path, SOCKET_PATH);
+
     while(running)
     {
         // 1. 创建客户端 socket
-        int fd_sock = socket(AF_UNIX, SOCK_STREAM, 0);
-        if(fd_sock<0)
+        if (fd_sock<0)
         {
-            syslog(LOG_ERR, "socket failed");
-            sleep(1);
-            continue;
-        }
-
-        // 2. 连接 service 服务端
-        struct sockaddr_un addr;
-        memset(&addr, 0, sizeof(addr));
-        addr.sun_family=AF_UNIX;
-        strcpy(addr.sun_path, SOCKET_PATH);
-        if(connect(fd_sock,(const struct sockaddr *)&addr,sizeof(addr))<0)
-        {
-            syslog(LOG_ERR, "connect failed");
-            sleep(1);
-            continue;
+            fd_sock = socket(AF_UNIX, SOCK_STREAM, 0);
+            if(fd_sock<0)
+            {
+                LOG_ERROR_ERRNO("connect failed");
+                sleep(1);
+                continue;
+            }
+            if(connect(fd_sock,(const struct sockaddr *)&addr,sizeof(addr))<0)
+            {
+                LOG_ERROR_ERRNO("connect failed");
+                close(fd_sock);  //关闭fd，重新判断fd_socket
+                fd_sock = -1;  
+                sleep(1);
+                continue;
+            }
+            LOG_SOCKET_INFO("connect succeed");
         }
         // 3. 加锁读取数据
         pthread_mutex_lock(&g_data_mutex);
@@ -140,16 +154,28 @@ void *client_pthread(void *arg)
         pthread_mutex_unlock(&g_data_mutex);
         // 4. 拼接成 JSON
         char json[256];
-        snprintf(json, sizeof(json),
+        int ret_len=snprintf(json, sizeof(json),
         "{\"temp\":%.2f,\"hum\":%.2f,\"ax\":%.2f,\"ay\":%.2f,\"az\":%.2f,\"gx\":%.2f,\"gy\":%.2f,\"gz\":%.2f}",
         data.temp, data.hum, data.ax, data.ay, data.az, data.gx, data.gy, data.gz);
-        write(fd_sock, json, strlen(json));
-        syslog(LOG_DEBUG, "上报成功：%s", json);
+        if(ret_len >= (int)sizeof(json)){
+        LOG_SOCKET_WARN("JSON缓冲区溢出截断，数据不完整");
+        }
 
-        close(fd_sock);
+        ssize_t ret=write(fd_sock, json, strlen(json));
+        if(ret < 0) {
+            // 写入失败，说明连接已断开
+            LOG_SOCKET_DEBUG("write failed, reconnecting...");
+            close(fd_sock);
+            fd_sock = -1;           // 标记为断开，下次循环重连
+            LOG_SOCKET_DEBUG("连接断开，现在开始重新连接");
+            sleep(1);
+            continue;
+        }
+        LOG_SOCKET_DEBUG("json上报成功");
         sleep(1);
     }
-    syslog(LOG_INFO, "socket 关闭");
+    if(fd_sock >= 0) close(fd_sock);
+    LOG_SOCKET_INFO("socket 关闭");
     return NULL;
 } 
 
@@ -158,12 +184,17 @@ void *client_pthread(void *arg)
 
 int main()
 {
-    openlog("iot_collect", LOG_PID, LOG_USER);
+    
 
     if (daemonize() != 0)
     {
+        openlog("collect_daemon", LOG_PID, LOG_DAEMON);
+        syslog(LOG_ERR, "daemonize create failed");
+        closelog();
         return -1;
     }
+    log_init();
+    signal(SIGPIPE, SIG_IGN);
     signal(SIGTERM, signal_handler);
     // 初始化互斥锁
     pthread_mutex_init(&g_data_mutex, NULL);
@@ -171,26 +202,26 @@ int main()
     pthread_t collect_tid;
     if(pthread_create(&collect_tid,NULL,collect_pthread,NULL)!=0)
     {
-        syslog(LOG_ERR, "collect_pthread create failed: %m");
+        LOG_ERROR_ERRNO("collect_pthread create failed");
+        LOG_ERROR("connect failed");
         return -1;
     }
     // 2.上报数据给后台
     pthread_t client_tid;
     if(pthread_create(&client_tid,NULL,client_pthread,NULL)!=0)
     {
-        syslog(LOG_ERR, "client_pthread create failed: %m");
+        LOG_ERROR_ERRNO("client_pthread create failed");
         return -1;
     }
 
 
-    syslog(LOG_INFO, "采集进程成功启动");
-    syslog(LOG_INFO, "功能：I2C 传感器采集 + 本地socket发送数据");
+    LOG_COLLECT_INFO("采集进程成功启动");
+    LOG_COLLECT_INFO("功能：I2C 传感器采集 + 本地socket发送数据");
 
     pthread_join(collect_tid,NULL);
     pthread_join(client_tid,NULL);
     pthread_mutex_destroy(&g_data_mutex);
-    syslog(LOG_INFO, "程序正常退出");
-    closelog();
+    LOG_COLLECT_INFO("程序正常退出");
     return 0;
 }
 

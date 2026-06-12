@@ -12,7 +12,8 @@
 #include <signal.h>
 #include <sys/stat.h>
 #include <fcntl.h>
- #include <syslog.h>
+#include <syslog.h>
+#include <errno.h>
 
 // 传感器数据结构体（三进程统一用这个）
 typedef struct {
